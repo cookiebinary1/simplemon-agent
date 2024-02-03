@@ -32,6 +32,7 @@ type SystemMetrics struct {
 type DiskMetric struct {
 	Path        string  `json:"path"`
 	Type        string  `json:"type"`
+	Fstype      string  `json:"fstype"`
 	Total       uint64  `json:"total"`
 	Free        uint64  `json:"free"`
 	Used        uint64  `json:"used"`
@@ -39,7 +40,7 @@ type DiskMetric struct {
 }
 
 func isPhysical(partition disk.PartitionStat) bool {
-	physicalTypes := []string{"ext4", "ext3", "ntfs", "fat32", "xfs"}
+	physicalTypes := []string{"ext4", "ext3", "ntfs", "fat32", "xfs", "apfs", "btrfs", "zfs"}
 	for _, t := range physicalTypes {
 		if partition.Fstype == t {
 			return true
@@ -52,6 +53,8 @@ func gatherDiskMetrics() ([]DiskMetric, error) {
 	var metrics []DiskMetric
 
 	partitions, err := disk.Partitions(false)
+
+	fmt.Printf("Partitions: %v\n", partitions)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +71,7 @@ func gatherDiskMetrics() ([]DiskMetric, error) {
 			Free:        usageStat.Free,
 			Used:        usageStat.Used,
 			UsedPercent: usageStat.UsedPercent,
+			Fstype:      partition.Fstype,
 		}
 		if isPhysical(partition) {
 			metric.Type = "Physical"
