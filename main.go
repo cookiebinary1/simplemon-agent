@@ -1,27 +1,37 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
-	"net/http"
 	"time"
 )
 
+var conn *websocket.Conn
+
+func connectWebSocket(url string) error {
+	var dialer *websocket.Dialer
+	var err error
+	conn, _, err = dialer.Dial(url, nil)
+	if err != nil {
+		return fmt.Errorf("websocket dial: %v", err)
+	}
+	return nil
+}
+
 type SystemMetrics struct {
 	DiskUsage    float64   `json:"disk_usage"`
-	CPUUsage     float64   `json:"cpu_usage"`      // Celkové priemerné využitie CPU
-	CPUCoreUsage []float64 `json:"cpu_core_usage"` // Využitie jednotlivých jadier
+	CPUUsage     float64   `json:"cpu_usage"`
+	CPUCoreUsage []float64 `json:"cpu_core_usage"`
 	MemoryUsage  float64   `json:"memory_usage"`
 }
 
-// Struktúra pre uchovávanie metrík o disku
 type DiskMetric struct {
 	Path        string  `json:"path"`
-	Type        string  `json:"type"` // Pridané pre určenie typu disku
+	Type        string  `json:"type"`
 	Total       uint64  `json:"total"`
 	Free        uint64  `json:"free"`
 	Used        uint64  `json:"used"`
@@ -29,8 +39,6 @@ type DiskMetric struct {
 }
 
 func isPhysical(partition disk.PartitionStat) bool {
-	// Toto je veľmi základná heuristika a možno ju bude treba prispôsobiť
-	// podľa konkrétnych potrieb alebo konfigurácie systému
 	physicalTypes := []string{"ext4", "ext3", "ntfs", "fat32", "xfs"}
 	for _, t := range physicalTypes {
 		if partition.Fstype == t {
@@ -39,6 +47,7 @@ func isPhysical(partition disk.PartitionStat) bool {
 	}
 	return false
 }
+
 func gatherDiskMetrics() ([]DiskMetric, error) {
 	var metrics []DiskMetric
 
@@ -70,22 +79,22 @@ func gatherDiskMetrics() ([]DiskMetric, error) {
 }
 
 func main() {
+
+	websocketURL := "ws://localhost:8080" // Zmeň na tvoju WebSocket URL
 	for {
-		// Získanie systémových metrík
+
 		systemMetrics, err := gatherMetrics()
 		if err != nil {
 			fmt.Println("Error gathering system metrics:", err)
 			return
 		}
 
-		// Získanie metrík disku
 		diskMetrics, err := gatherDiskMetrics()
 		if err != nil {
 			fmt.Println("Error gathering disk metrics:", err)
 			return
 		}
 
-		// Kombinovanie systémových metrík a metrík disku do jedného objektu
 		allMetrics := struct {
 			SystemMetrics *SystemMetrics `json:"system"`
 			DiskMetrics   []DiskMetric   `json:"disks"`
@@ -94,15 +103,16 @@ func main() {
 			DiskMetrics:   diskMetrics,
 		}
 
-		// Odoslanie kombinovaných metrík
-		err = sendMetrics("http://simplemon-server.test/api/metrics", allMetrics)
+		err = sendMetrics(websocketURL, allMetrics)
 		if err != nil {
 			fmt.Println("Error sending metrics:", err)
-			return
+			time.Sleep(1 * time.Second)
+			continue
 		}
 
-		// Čakanie pred ďalšou iteráciou
-		time.Sleep(1 * time.Second) // Zmenené na 60 sekúnd pre ilustráciu
+		fmt.Println("Metrics were sent")
+
+		time.Sleep(1 * time.Second)
 	}
 }
 
@@ -113,14 +123,14 @@ func gatherMetrics() (*SystemMetrics, error) {
 		return nil, err
 	}
 
-	// Celkové CPU usage (priemer)
-	cpuPercent, err := cpu.Percent(1*time.Second, false) // False znamená celkový priemer
+	// Total CPU usage (average)
+	cpuPercent, err := cpu.Percent(1*time.Second, false)
 	if err != nil {
 		return nil, err
 	}
 
-	// Využitie jednotlivých jadier CPU
-	cpuCorePercent, err := cpu.Percent(1*time.Second, true) // True znamená využitie jednotlivých jadier
+	// Use of individual CPU cores
+	cpuCorePercent, err := cpu.Percent(1*time.Second, true)
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +143,8 @@ func gatherMetrics() (*SystemMetrics, error) {
 
 	metrics := &SystemMetrics{
 		DiskUsage:    d.UsedPercent,
-		CPUUsage:     cpuPercent[0],  // Priemerné využitie (môže byť zavádzajúce, zvyčajne sa používa ako celkový priemer)
-		CPUCoreUsage: cpuCorePercent, // Využitie jednotlivých jadier
+		CPUUsage:     cpuPercent[0],
+		CPUCoreUsage: cpuCorePercent,
 		MemoryUsage:  m.UsedPercent,
 	}
 
@@ -142,23 +152,22 @@ func gatherMetrics() (*SystemMetrics, error) {
 }
 
 func sendMetrics(url string, metrics interface{}) error {
+	if conn == nil {
+		if err := connectWebSocket(url); err != nil {
+			return err
+		}
+	}
 
 	jsonData, err := json.Marshal(metrics)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(url)                     // Môžeš zakomentovať po dokončení testovania
-	fmt.Printf("%s\n", string(jsonData)) // Pre výpis JSON reprezentácie odosielaných údajov
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	err = conn.WriteMessage(websocket.TextMessage, jsonData)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to send metrics, server responded with status code: %d", resp.StatusCode)
+		_ = conn.Close()
+		conn = nil
+		return fmt.Errorf("websocket write: %v, trying to reconnect...", err)
 	}
 
 	return nil
