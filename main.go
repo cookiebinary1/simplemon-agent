@@ -84,7 +84,7 @@ func gatherDiskMetrics() ([]DiskMetric, error) {
 
 func main() {
 
-	websocketURL := "ws://localhost:8080" // Zmeň na tvoju WebSocket URL
+	websocketURL := "ws://localhost:6063" // Zmeň na tvoju WebSocket URL
 	for {
 
 		systemMetrics, err := gatherMetrics()
