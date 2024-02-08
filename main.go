@@ -7,15 +7,46 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
+	"net/http"
+	"os"
 	"time"
 )
 
+type Config struct {
+	ServiceUrl string `json:"serviceUrl"`
+	ApiKey     string `json:"apiKey"`
+}
+
 var conn *websocket.Conn
 
-func connectWebSocket(url string) error {
+func loadConfig() Config {
+	configFile, err := os.ReadFile("/etc/simplemon.conf")
+	if err != nil {
+		fmt.Println("Error reading config file:", err)
+		return Config{}
+	}
+
+	var config Config
+	err = json.Unmarshal(configFile, &config)
+	if err != nil {
+		fmt.Println("Error parsing config file:", err)
+		return Config{}
+	}
+
+	fmt.Printf("Service URL: %s\n", config.ServiceUrl)
+	fmt.Printf("Api Key: %s\n", config.ApiKey)
+
+	return config
+}
+
+func connectWebSocket(url string, apiKey string) error {
 	var dialer *websocket.Dialer
 	var err error
-	conn, _, err = dialer.Dial(url, nil)
+
+	header := http.Header{}
+	header.Add("Authorization", "Bearer "+apiKey)
+
+	conn, _, err = dialer.Dial(url, header)
 	if err != nil {
 		return fmt.Errorf("websocket dial: %v", err)
 	}
@@ -84,7 +115,8 @@ func gatherDiskMetrics() ([]DiskMetric, error) {
 
 func main() {
 
-	websocketURL := "ws://localhost:6063" // Zmeň na tvoju WebSocket URL
+	config := loadConfig()
+
 	for {
 
 		systemMetrics, err := gatherMetrics()
@@ -107,7 +139,7 @@ func main() {
 			DiskMetrics:   diskMetrics,
 		}
 
-		err = sendMetrics(websocketURL, allMetrics)
+		err = sendMetrics(config.ServiceUrl, config.ApiKey, allMetrics)
 		if err != nil {
 			fmt.Println("Error sending metrics:", err)
 			time.Sleep(1 * time.Second)
@@ -155,9 +187,9 @@ func gatherMetrics() (*SystemMetrics, error) {
 	return metrics, nil
 }
 
-func sendMetrics(url string, metrics interface{}) error {
+func sendMetrics(url string, apiKey string, metrics interface{}) error {
 	if conn == nil {
-		if err := connectWebSocket(url); err != nil {
+		if err := connectWebSocket(url, apiKey); err != nil {
 			return err
 		}
 	}
