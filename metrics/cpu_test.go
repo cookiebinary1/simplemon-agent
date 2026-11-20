@@ -120,3 +120,12 @@ func TestProcessStatSnapshot(t *testing.T) {
 		t.Fatal("accepted truncated stat")
 	}
 }
+
+func TestParseStatmShared(t *testing.T) {
+	if got := parseStatmShared("1000 400 300 10 0 50 0\n"); got != 300 {
+		t.Fatalf("shared = %d, want 300", got)
+	}
+	if got := parseStatmShared("bad"); got != 0 {
+		t.Fatalf("shared = %d, want 0", got)
+	}
+}

@@ -20,6 +20,9 @@ type Process struct {
 	Name     string
 	cpu      processCPUStat
 	rssPages uint64
+	// sharedPages is resident memory backed by files or shared memory
+	// (e.g. Postgres shared buffers). It is the same pages in every process.
+	sharedPages uint64
 }
 
 func readProcess(pid int) (Process, error) {
@@ -27,7 +30,28 @@ func readProcess(pid int) (Process, error) {
 	if err != nil {
 		return Process{}, err
 	}
-	return parseProcessStat(pid, string(data))
+	proc, err := parseProcessStat(pid, string(data))
+	if err != nil {
+		return proc, err
+	}
+	// statm is world readable, unlike smaps_rollup; missing it is not fatal.
+	if statm, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "statm")); err == nil {
+		proc.sharedPages = parseStatmShared(string(statm))
+	}
+	return proc, nil
+}
+
+// parseStatmShared returns the third statm field: resident shared pages.
+func parseStatmShared(statm string) uint64 {
+	fields := strings.Fields(statm)
+	if len(fields) < 3 {
+		return 0
+	}
+	shared, err := strconv.ParseUint(fields[2], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return shared
 }
 
 func parseProcessStat(pid int, stat string) (Process, error) {

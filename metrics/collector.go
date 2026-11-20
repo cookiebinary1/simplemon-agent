@@ -205,23 +205,34 @@ func (c *Collector) GatherMemory(processes []Process) (*internal.MemoryMetrics, 
 
 	// Get process information
 	// Pre-allocate map with estimated size
+	// Summing RSS counts shared pages once per process: 70 Postgres backends
+	// sharing 1 GB of buffers showed up as 70 GB. A group is its private
+	// memory plus the largest shared set, counted once.
 	processMap := make(map[string]*internal.ProcessInfo, len(processes)/processMapInitDivisor)
+	maxShared := make(map[string]uint64, len(processes)/processMapInitDivisor)
 	for _, proc := range processes {
-		memUsage := proc.rssPages * c.pageSize
+		shared := proc.sharedPages
+		if shared > proc.rssPages {
+			shared = proc.rssPages
+		}
+		private := (proc.rssPages - shared) * c.pageSize
+		shared *= c.pageSize
 
 		baseName := proc.Name
-		if info, exists := processMap[baseName]; exists {
-			info.Value += float64(memUsage)
-			info.Count++
-			info.ValueBytes += memUsage
-		} else {
-			processMap[baseName] = &internal.ProcessInfo{
-				Name:       baseName,
-				Value:      float64(memUsage),
-				ValueBytes: memUsage,
-				Count:      1,
-			}
+		info, exists := processMap[baseName]
+		if !exists {
+			info = &internal.ProcessInfo{Name: baseName}
+			processMap[baseName] = info
 		}
+		info.ValueBytes += private
+		info.Count++
+		if shared > maxShared[baseName] {
+			maxShared[baseName] = shared
+		}
+	}
+	for name, info := range processMap {
+		info.ValueBytes += maxShared[name]
+		info.Value = float64(info.ValueBytes)
 	}
 
 	// Convert map to slice and sort
