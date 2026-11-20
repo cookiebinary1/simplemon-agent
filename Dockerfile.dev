@@ -1,0 +1,21 @@
+# Use the official Go image as the base
+FROM golang:1.24
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Install stress tool
+RUN apt-get update && apt-get install -y stress && rm -rf /var/lib/apt/lists/*
+
+# Copy go.mod and go.sum to download dependencies first
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Install air for live reloading (pinned to a version compatible with Go 1.22)
+RUN go install github.com/cosmtrek/air@v1.52.0
+
+# Copy the rest of the source code
+COPY . .
+
+# Run air to watch for file changes and reload
+CMD ["air", "-c", ".air.toml"]

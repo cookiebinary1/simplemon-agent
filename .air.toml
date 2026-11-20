@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -buildvcs=false -o ./tmp/myapp ./cmd/simplemon-agent"
+  bin = "./tmp/myapp"
+  delay = 1000 # Delay in ms before restarting
+  include_ext = ["go", "tpl", "tmpl", "html"]
+  exclude_dir = ["vendor", "tmp", "logs"]
+  exclude_file = []
+  include_dir = ["cmd", "pkg", "internal"]
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true
