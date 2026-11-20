@@ -1,6 +1,0 @@
-#!/bin/bash
-# Copy the plist file to LaunchDaemons
-cp /usr/local/bin/com.simplemon.simplemon.plist /Library/LaunchDaemons/
-# Load the plist to start the service
-launchctl load /Library/LaunchDaemons/com.simplemon.simplemon.plist
-exit 0

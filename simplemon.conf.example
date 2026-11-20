@@ -1,7 +1,7 @@
 {
-  "serviceHost": "localhost:8092",
-  "secure": false,
-  "apiKey": "REMOVED_SECRET",
-  "serverToken": "REMOVED_SECRET",
+  "serviceHost": "monitoring.example.com",
+  "secure": true,
+  "apiKey": "YOUR_API_KEY",
+  "serverToken": "YOUR_SERVER_TOKEN",
   "verbose": false
 }
