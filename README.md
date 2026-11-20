@@ -74,9 +74,7 @@ source snapshots. The SimpleMon panel serves the managed binaries and
 `SHA256SUMS` alongside the license files. The Linux installer can enable daily updates via a systemd timer
 when supplied with `SIMPLEMON_BIN_BASE_URL`.
 
-Use [GitHub Issues](https://github.com/cookiebinary1/simplemon-agent/issues) for
-bugs and suggestions. Include the agent version, Linux distribution and
-architecture. Remove credentials and private host details from logs.
+See [Contributing](CONTRIBUTING.md) for bug reports, discussions, and pull requests.
 
 ## License
 
