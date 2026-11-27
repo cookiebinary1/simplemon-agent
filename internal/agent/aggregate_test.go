@@ -53,6 +53,24 @@ func TestAggregateSamples(t *testing.T) {
 	}
 }
 
+// Per-process I/O is summed like the I/O totals, so shares add up to 100 %.
+func TestAggregateIOProcessesAreSummed(t *testing.T) {
+	io := func(read uint64, procs ...internal.ProcessInfo) MetricEntry {
+		return MetricEntry{Timestamp: "t", DeltaTime: 1, IO: &internal.IoMetrics{TotalRead: read, Processes: procs}}
+	}
+	got := aggregateSamples([]MetricEntry{
+		io(300, internal.ProcessInfo{Name: "db", Value: 200, ValueBytes: 200, ReadBytes: 200}, internal.ProcessInfo{Name: "web", Value: 100, ValueBytes: 100, ReadBytes: 100}),
+		io(100, internal.ProcessInfo{Name: "db", Value: 100, ValueBytes: 100, ReadBytes: 100}),
+	}, true)
+	procs := got.IO.Processes
+	if got.IO.TotalRead != 400 || len(procs) != 2 || procs[0].Name != "db" || procs[0].ReadBytes != 300 || procs[1].ReadBytes != 100 {
+		t.Fatalf("io = %+v", got.IO)
+	}
+	if !near(procs[0].ValuePercent, 75) || !near(procs[1].ValuePercent, 25) {
+		t.Errorf("shares = %v %v", procs[0].ValuePercent, procs[1].ValuePercent)
+	}
+}
+
 func TestAggregateSamplesWithoutProcesses(t *testing.T) {
 	got := aggregateSamples([]MetricEntry{sample("t1", 0.1, 10, 0, 0, []internal.ProcessInfo{{Name: "a", Value: 1}})}, false)
 	if got.CPU.Processes == nil || len(got.CPU.Processes) != 0 || len(got.Memory.Processes) != 0 || len(got.IO.Processes) != 0 {

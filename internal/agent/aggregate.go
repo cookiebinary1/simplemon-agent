@@ -13,8 +13,9 @@ import (
 const maxStoredProcesses = 10
 
 // aggregateSamples merges per-second samples into one stored sample.
-// Gauges are averaged, counters (I/O, network) are summed over the window,
-// and slow values (disks, system, info) come from the newest sample.
+// Gauges are averaged, counters (I/O, network, per-process I/O) are summed
+// over the window, and slow values (disks, system, info) come from the
+// newest sample.
 // Process lists are kept only when withProcesses is true.
 func aggregateSamples(samples []MetricEntry, withProcesses bool) MetricEntry {
 	last := samples[len(samples)-1]
@@ -116,24 +117,31 @@ func aggregateSamples(samples []MetricEntry, withProcesses bool) MetricEntry {
 	mem.Processes = []internal.ProcessInfo{}
 	io.Processes = []internal.ProcessInfo{}
 	if withProcesses {
-		cpu.Processes = averageProcesses(samples, n, func(s MetricEntry) []internal.ProcessInfo {
+		cpu.Processes = mergeProcesses(samples, n, func(s MetricEntry) []internal.ProcessInfo {
 			if s.CPU == nil {
 				return nil
 			}
 			return s.CPU.Processes
 		})
-		mem.Processes = averageProcesses(samples, n, func(s MetricEntry) []internal.ProcessInfo {
+		mem.Processes = mergeProcesses(samples, n, func(s MetricEntry) []internal.ProcessInfo {
 			if s.Memory == nil {
 				return nil
 			}
 			return s.Memory.Processes
 		})
-		io.Processes = averageProcesses(samples, n, func(s MetricEntry) []internal.ProcessInfo {
+		// Per-process I/O is a counter like io.TotalRead, so it is summed (divisor 1)
+		// and its share is recomputed from the window totals.
+		io.Processes = mergeProcesses(samples, 1, func(s MetricEntry) []internal.ProcessInfo {
 			if s.IO == nil {
 				return nil
 			}
 			return s.IO.Processes
 		})
+		if total := io.TotalRead + io.TotalWrite; total > 0 {
+			for i := range io.Processes {
+				io.Processes[i].ValuePercent = float64(io.Processes[i].ValueBytes) / float64(total) * 100
+			}
+		}
 	}
 
 	out.CPU = &cpu
@@ -143,10 +151,10 @@ func aggregateSamples(samples []MetricEntry, withProcesses bool) MetricEntry {
 	return out
 }
 
-// averageProcesses averages per-sample process values over the window.
-// A process missing from a sample counts as zero for that sample, so the
-// result keeps the same "per sample" meaning as a single measurement.
-func averageProcesses(samples []MetricEntry, n float64, pick func(MetricEntry) []internal.ProcessInfo) []internal.ProcessInfo {
+// mergeProcesses adds up process values over the window and divides them by
+// n: the sample count for gauges (an average), 1 for counters (a sum). A
+// process missing from a sample counts as zero for that sample.
+func mergeProcesses(samples []MetricEntry, n float64, pick func(MetricEntry) []internal.ProcessInfo) []internal.ProcessInfo {
 	byName := map[string]*internal.ProcessInfo{}
 	var order []string
 

@@ -42,14 +42,29 @@ Older releases stay available.
 | `simplemon-linux-arm` | 32-bit ARM, ARMv6 and newer |
 | `simplemon-linux-x86` | 32-bit x86 |
 
-`SHA256SUMS` lists the checksum of every binary. Each binary also has a signed
-[build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
-that proves which workflow and commit built it:
+`SHA256SUMS` lists the checksum of every binary. `SHA256SUMS.sig` signs it
+with the SimpleMon release key. The key is not stored on GitHub. Before
+signing, the maintainer rebuilds every binary from the tag and checks that it
+matches the GitHub build bit for bit. The installer and the daily updater
+refuse a release without a valid signature. To check a download by hand:
 
 ```sh
+echo 'simplemon-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEHBwGD1NiVrAOr4DPKJT1KcoHCLTeqbboPB23eIcJst' > allowed_signers
+ssh-keygen -Y verify -f allowed_signers -I simplemon-release -n simplemon-release \
+  -s SHA256SUMS.sig < SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
+```
+
+Each binary also has a signed
+[build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations)
+that shows which workflow and commit built it:
+
+```sh
 gh attestation verify simplemon-linux-amd64 --repo cookiebinary1/simplemon-agent
 ```
+
+Builds are reproducible: `-trimpath`, `-buildvcs=false` and the Go version
+from `agent-version.json` give the same bytes on any machine.
 
 The latest release is always at
 `https://github.com/cookiebinary1/simplemon-agent/releases/latest/download/<asset>`.

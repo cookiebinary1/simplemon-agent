@@ -13,15 +13,21 @@ import (
 	"github.com/cookiebinary1/simplemon-agent/internal"
 )
 
-// GatherDiskMetrics collects and returns disk usage metrics for all physical disks.
+// GatherDiskMetrics returns usage of every mounted disk filesystem.
 func GatherDiskMetrics() ([]internal.DiskMetric, error) {
-	// Get list of mount points
-	mounts, err := os.ReadFile("/proc/mounts")
+	return gatherDisks("/proc/mounts")
+}
+
+func gatherDisks(mountsPath string) ([]internal.DiskMetric, error) {
+	mounts, err := os.ReadFile(mountsPath)
 	if err != nil {
 		return nil, err
 	}
 
 	var diskMetrics []internal.DiskMetric
+	// A filesystem mounted more than once (bind mounts) has one device ID.
+	// It is reported once, under its first mount point in /proc/mounts.
+	seen := map[uint64]bool{}
 	lines := strings.Split(string(mounts), "\n")
 
 	for _, line := range lines {
@@ -30,10 +36,9 @@ func GatherDiskMetrics() ([]internal.DiskMetric, error) {
 			continue
 		}
 
-		mountPoint := fields[1]
+		mountPoint := mountUnescaper.Replace(fields[1])
 		fsType := fields[2]
 
-		// Skip virtual/unsupported filesystems
 		if !isAllowedFS(fsType) {
 			continue
 		}
@@ -41,6 +46,12 @@ func GatherDiskMetrics() ([]internal.DiskMetric, error) {
 		info, err := os.Stat(mountPoint)
 		if err != nil || !info.IsDir() {
 			continue
+		}
+		if st, ok := info.Sys().(*syscall.Stat_t); ok {
+			if seen[uint64(st.Dev)] {
+				continue
+			}
+			seen[uint64(st.Dev)] = true
 		}
 
 		var stat syscall.Statfs_t
@@ -74,6 +85,9 @@ func GatherDiskMetrics() ([]internal.DiskMetric, error) {
 
 	return diskMetrics, nil
 }
+
+// /proc/mounts escapes space, tab, newline and backslash in paths as octal.
+var mountUnescaper = strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, `\`)
 
 // allowedTypes is a set of filesystem types to collect metrics for
 var allowedTypes = map[string]struct{}{

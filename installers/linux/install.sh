@@ -27,17 +27,27 @@ binary_name() {
   esac
 }
 
-# Download the release binary and check it against SHA256SUMS. Prints the temp file path.
+# Download the agent, verify the signed SHA256SUMS and the binary checksum.
+# Prints the temp file path. Releases are signed with the SimpleMon release
+# key; a release without a valid signature is never installed.
 download_agent() {
-  local name tmp sums expected
+  local name tmp sums sig signers expected
+  local signer='simplemon-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEHBwGD1NiVrAOr4DPKJT1KcoHCLTeqbboPB23eIcJst'
   name=$(binary_name)
+  command -v ssh-keygen >/dev/null || die "ssh-keygen (openssh-client) is required to verify the release signature"
   tmp=$(mktemp /usr/local/bin/.simplemon-agent.XXXXXX)
-  sums=$(mktemp)
-  curl -fsSL --connect-timeout 10 --max-time 120 "${RELEASE_URL}/${name}" -o "${tmp}"
+  sums=$(mktemp) sig=$(mktemp) signers=$(mktemp)
+  printf '%s\n' "${signer}" > "${signers}"
   curl -fsSL --connect-timeout 10 --max-time 30 "${RELEASE_URL}/SHA256SUMS" -o "${sums}"
+  curl -fsSL --connect-timeout 10 --max-time 30 "${RELEASE_URL}/SHA256SUMS.sig" -o "${sig}"
+  if ! ssh-keygen -Y verify -f "${signers}" -I simplemon-release -n simplemon-release -s "${sig}" < "${sums}" >/dev/null 2>&1; then
+    rm -f "${tmp}" "${sums}" "${sig}" "${signers}"
+    die "release signature is missing or invalid, refusing to install"
+  fi
   expected=$(awk -v name="${name}" '$2 == name {print $1}' "${sums}")
-  rm -f "${sums}"
+  rm -f "${sums}" "${sig}" "${signers}"
   [[ "${expected}" =~ ^[a-fA-F0-9]{64}$ ]] || { rm -f "${tmp}"; die "missing checksum for ${name}"; }
+  curl -fsSL --connect-timeout 10 --max-time 120 "${RELEASE_URL}/${name}" -o "${tmp}"
   printf '%s  %s\n' "${expected}" "${tmp}" | sha256sum -c --quiet - >&2 || { rm -f "${tmp}"; die "checksum mismatch"; }
   chmod 0755 "${tmp}"
   echo "${tmp}"
