@@ -1,0 +1,5 @@
+/simplemon-agent
+/dist/
+simplemon.conf
+.env
+.idea/

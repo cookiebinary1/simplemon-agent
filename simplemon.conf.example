@@ -1,0 +1,5 @@
+{
+  "serviceHost": "monitoring.example.com",
+  "secure": true,
+  "serverToken": "YOUR_SERVER_TOKEN"
+}
