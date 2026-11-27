@@ -1,6 +1,6 @@
 # Third-party licenses
 
-## Gorilla WebSocket v1.5.3 (BSD-2-Clause)
+## Gorilla WebSocket (BSD-2-Clause)
 
 Copyright (c) 2013 The Gorilla WebSocket Authors. All rights reserved.
 
@@ -25,7 +25,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## Go standard library (BSD-3-Clause)
+## Go standard library and golang.org/x/net (BSD-3-Clause)
 
 Copyright (c) 2009 The Go Authors. All rights reserved.
 

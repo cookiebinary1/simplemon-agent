@@ -56,9 +56,12 @@ Restart=always
 RestartSec=5
 User=simplemon
 Group=simplemon
-# Per-process I/O (/proc/<pid>/io) of other users needs ptrace read access.
+# /proc/<pid>/io of other users is 0400 root: reading it needs CAP_DAC_READ_SEARCH
+# (file mode) and CAP_SYS_PTRACE (ptrace access check).
 AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+# CAP_DAC_READ_SEARCH could read any file, so hide the secrets the agent never needs.
+InaccessiblePaths=-/etc/shadow -/etc/shadow- -/etc/gshadow -/etc/gshadow- -/etc/sudoers -/etc/sudoers.d -/etc/ssh -/root
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only

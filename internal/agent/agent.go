@@ -12,8 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -205,7 +207,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a.cfg.HealthPort > 0 {
 		a.healthServer = a.newHealthServer()
 		go func(server *http.Server) {
-			slog.Info("starting health server", "port", a.cfg.HealthPort)
+			slog.Info("starting health server", "addr", server.Addr)
 			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				slog.Error("health server error", "error", err)
 			}
@@ -836,7 +838,13 @@ func (a *Agent) uploadBatch() bool {
 	return true
 }
 
+// newHealthServer serves unauthenticated status, so it listens on loopback
+// unless healthHost asks for another address.
 func (a *Agent) newHealthServer() *http.Server {
+	host := a.cfg.HealthHost
+	if host == "" {
+		host = "127.0.0.1"
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -875,7 +883,7 @@ func (a *Agent) newHealthServer() *http.Server {
 	})
 
 	return &http.Server{
-		Addr:         fmt.Sprintf(":%d", a.cfg.HealthPort),
+		Addr:         net.JoinHostPort(host, strconv.Itoa(a.cfg.HealthPort)),
 		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,

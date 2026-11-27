@@ -12,6 +12,12 @@ Use the install command the panel shows for the registered server. It
 downloads the latest release, verifies its checksum, writes the config and
 starts a systemd service that runs as the unprivileged `simplemon` user.
 
+The service keeps two capabilities. `CAP_SYS_PTRACE` and
+`CAP_DAC_READ_SEARCH` are needed to read `/proc/<pid>/io` of processes owned
+by other users (the files are `0400 root`). The unit hides `/etc/shadow`,
+`/etc/ssh`, `/root` and the sudoers files from the agent, and the rest of the
+system is read-only for it.
+
 For a manual install, create `/etc/simplemon.conf` from
 [`simplemon.conf.example`](simplemon.conf.example) and run:
 
@@ -50,7 +56,7 @@ The latest release is always at
 
 ## Build from source
 
-Go 1.23 or newer is required.
+Go 1.26 or newer is required.
 
 ```sh
 git clone https://github.com/cookiebinary1/simplemon-agent.git
@@ -72,14 +78,15 @@ server token.
 | Field | Purpose |
 | --- | --- |
 | `serviceHost` | Backend host with an optional port, without the URL scheme |
-| `secure` | `true` for HTTPS and WSS. With `false` the token is sent unencrypted |
+| `secure` | HTTPS and WSS (default `true`). Set `false` only for a local backend; the token is then sent unencrypted |
 | `serverToken` | Server token issued by the panel |
 | `apiKey` | Optional. Only needed by old backends that also expect the account API key |
 | `metricInterval` | Collection interval in ms (default 1000) |
 | `storeInterval` | Stored samples average this many ms of data (default 10000) |
 | `batchInterval` | Upload interval in ms (default 10000) |
 | `verbose` | Debug logging (default false) |
-| `healthPort` | Off by default. A nonzero port serves unauthenticated `/health` and `/ready` on all interfaces, so firewall it |
+| `healthPort` | Off by default. A nonzero port serves unauthenticated `/health` and `/ready` |
+| `healthHost` | Address of the health server (default `127.0.0.1`). `0.0.0.0` listens on all interfaces |
 
 ## Docker
 
@@ -112,4 +119,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [MIT](LICENSE). See [third-party licenses](THIRD_PARTY_LICENSES.md) for
-Gorilla WebSocket and the Go standard library.
+Gorilla WebSocket, golang.org/x/net and the Go standard library.

@@ -14,7 +14,7 @@ import (
 // Config is the JSON configuration file of the agent.
 type Config struct {
 	ServiceHost    string `json:"serviceHost"`    // Backend host with optional port, no scheme
-	Secure         bool   `json:"secure"`         // Use HTTPS and WSS
+	Secure         bool   `json:"secure"`         // Use HTTPS and WSS (default true)
 	ApiKey         string `json:"apiKey"`         // Legacy account API key, optional; serverToken authenticates the agent
 	ServerToken    string `json:"serverToken"`    // Per-server token issued by the panel
 	Verbose        bool   `json:"verbose"`        // Debug logging
@@ -22,6 +22,7 @@ type Config struct {
 	BatchInterval  int    `json:"batchInterval"`  // Upload interval in ms (default 10000)
 	StoreInterval  int    `json:"storeInterval"`  // Stored sample interval in ms; samples are averaged (default 10000)
 	HealthPort     int    `json:"healthPort"`     // Port for /health and /ready (0 = disabled)
+	HealthHost     string `json:"healthHost"`     // Health server address; empty = 127.0.0.1, "0.0.0.0" = all interfaces
 }
 
 const (
@@ -39,7 +40,8 @@ var SearchPaths = []string{"./simplemon.conf", "/etc/simplemon.conf"}
 
 // Load reads the config from path, or from the first file in SearchPaths
 // when path is empty. It fills in default intervals. It returns the path it
-// used so the caller can log it.
+// used so the caller can log it. A missing "secure" means true, so a config
+// never falls back to sending the token unencrypted by accident.
 func Load(path string) (*Config, string, error) {
 	var data []byte
 	var err error
@@ -60,7 +62,7 @@ func Load(path string) (*Config, string, error) {
 		}
 	}
 
-	var cfg Config
+	cfg := Config{Secure: true}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, path, fmt.Errorf("parsing config %s: %w", path, err)
 	}
